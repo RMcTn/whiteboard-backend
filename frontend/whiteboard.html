@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.1.0/uuidv4.min.js"></script>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script type="text/javascript">
+        window.onload = function () {
+            let conn;
+            let log = document.getElementById("log");
+            let svgElement = document.getElementById("svg");
+            let gElement = document.getElementById("g");
+            const idPrefix = 'U'; //HTML id attribute can't start with a number, prepend the UUID when using it with this
+            const idSelector = 'id';
+
+            // Returns path element with given uuid otherwise false
+            function getPath(id) {
+                const result = d3.select(`path[${idSelector}=${idPrefix}${id}]`);
+                if (result.empty()) {
+                    return false;
+                }
+                return result;
+            }
+
+            function appendPointToPath(path, point) {
+                const {x, y} = point;
+                const pathContext = d3.path();
+                pathContext.bezierCurveTo(x, y, x, y, x, y);
+                const currentPathString = path.attr('d');
+                const appendedPathString = currentPathString + pathContext.toString();
+                path.attr('d', appendedPathString);
+            }
+
+            function drawPath(id, points) {
+                const pathContext = d3.path();
+                pathContext.moveTo(points[0].x, points[0].y);
+                points = points.slice(1);
+                for (const point of points) {
+                    pathContext.bezierCurveTo(point.x, point.y, point.x, point.y, point.x, point.y);
+                }
+
+                const newPath = d3.select(gElement).append('path');
+                newPath.attr('style', 'fill: none; stroke-linejoin: round; stroke-linecap: round; stroke: black;');
+                newPath.attr(idSelector, `${idPrefix}${id}`);
+                newPath.attr('d', pathContext.toString());
+            }
+
+            let svg = d3.select(svgElement);
+            let g = d3.select(gElement);
+            const zoomBehaviour = d3
+                .zoom()
+                .scaleExtent([1, 1000])
+                .on('zoom', zoomed)
+                .on('end', zoomEnded)
+                .filter((event) => event.button === 1 || event.type === 'wheel'); // Only allow middle mouse and scroll wheel events for zoomed function
+            svg.call(zoomBehaviour);
+
+            const dragBehaviour = d3
+                .drag()
+                .on('drag', dragged)
+                .on('start', dragStarted)
+                .on('end', dragEnded);
+            svg.call(dragBehaviour);
+
+            let transform = {
+                x: 0,
+                y: 0,
+                k: 1,
+            };
+
+            function zoomed(event) {
+                const d3Transform = event.transform;
+                transform = {
+                    x: d3Transform.x,
+                    y: d3Transform.y,
+                    k: d3Transform.k,
+                };
+                g.attr('transform', d3Transform);
+
+                event.sourceEvent.type === 'wheel' ? svg.attr('cursor', 'default') : svg.attr('cursor', 'grabbing');
+            }
+
+            function zoomEnded() {
+                svg.attr('cursor', 'default');
+            }
+
+            let currentDrawingPoints = [],
+                currentPathDOM,
+                currentPathUUID,
+                currentDrawingPath;
+
+            function dragStarted(event) {
+                let [xLocal, yLocal] = d3.pointer(event);
+                xLocal = (xLocal - transform.x) / transform.k;
+                yLocal = (yLocal - transform.y) / transform.k;
+
+                currentDrawingPath = d3.path();
+                currentDrawingPath.moveTo(xLocal, yLocal);
+                currentPathUUID = uuidv4();
+
+                currentPathDOM = g
+                    .append('path')
+                    .attr(idSelector, `${idPrefix}${currentPathUUID}`)
+                    .attr('d', currentDrawingPath.toString())
+                    .attr('style', 'fill: none; stroke-linejoin: round; stroke-linecap: round; stroke: black;');
+                currentDrawingPoints.push({
+                    x: xLocal,
+                    y: yLocal,
+                });
+
+                const point = {
+                    x: xLocal,
+                    y: yLocal,
+                }
+
+                const message = {
+                    id: currentPathUUID,
+                    point: point
+                }
+                conn.send(JSON.stringify(message));
+            }
+
+            function dragged(event) {
+                // TODO: Line drawn is quite 'jaggy' on drawer's end, but not receiving client's end. Investigate.
+                let [xLocal, yLocal] = d3.pointer(event);
+                xLocal = (xLocal - transform.x) / transform.k;
+                yLocal = (yLocal - transform.y) / transform.k;
+
+                currentDrawingPath.bezierCurveTo(xLocal, yLocal, xLocal, yLocal, xLocal, yLocal);
+
+                // TODO: Test what happens if 2 elements have the same uuid (user edited).
+                currentPathDOM.attr('d', currentDrawingPath.toString());
+
+                currentDrawingPoints.push({
+                    x: xLocal,
+                    y: yLocal,
+                });
+                // TODO: Consider smoothing currentDrawingPoints before emitting? Avoids all receiving clients having to smooth
+                const point = {
+                    x: xLocal,
+                    y: yLocal,
+                };
+
+                const message = {
+                    id: currentPathUUID,
+                    point: point
+                }
+                conn.send(JSON.stringify(message));
+            }
+
+            function dragEnded() {
+                currentPathDOM = null;
+                currentDrawingPoints = [];
+                currentPathUUID = null;
+            }
+
+            let mouseX, mouseY;
+
+            svg.on('mousemove', function (event) {
+                [mouseX, mouseY] = d3.pointer(event);
+            });
+
+            svg.on('mouseover', function () {
+                svgElement.focus();
+            });
+
+            window.addEventListener('load', () => {
+                svgElement.focus();
+            });
+
+            function appendLog(item) {
+                let doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
+                log.appendChild(item);
+                if (doScroll) {
+                    log.scrollTop = log.scrollHeight - log.clientHeight;
+                }
+            }
+
+
+            if (window["WebSocket"]) {
+                conn = new WebSocket("ws://" + document.location.host + "/ws");
+                conn.onclose = function (evt) {
+                    console.log(evt);
+                    if (evt.code === 1009) {
+                        const item = document.createElement("div");
+                        item.innerHTML = "<b>Message was too big.</b>";
+                        appendLog(item);
+                    }
+                    const item = document.createElement("div");
+                    item.innerHTML = "<b>Connection closed.</b>";
+                    appendLog(item);
+                };
+                conn.onmessage = function (evt) {
+                    let messages = evt.data.split('\n');
+                    for (let i = 0; i < messages.length; i++) {
+                        console.log(messages[i]);
+                        const parsedMessage = JSON.parse(messages[i]);
+                        if (parsedMessage.event === "New connection") {
+                            drawPath(parsedMessage.id, parsedMessage.points)
+                            continue;
+                        }
+                        const existingPath = getPath(parsedMessage.id);
+                        if (existingPath) {
+                            appendPointToPath(existingPath, parsedMessage.point);
+                        } else {
+                            drawPath(parsedMessage.id, [parsedMessage.point]);
+                        }
+                    }
+                };
+            } else {
+                let item = document.createElement("div");
+                item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
+                appendLog(item);
+            }
+
+            window.onmousedown = function (event) {
+                conn.send(JSON.stringify({x: event.x, y: event.y}));
+            }
+        };
+    </script>
+</head>
+<body>
+<div id="log">
+
+</div>
+<div class="h-full m-0 p-0 overflow-hidden overflow-y-hidden">
+    <main class="bg-white overflow-hidden w-screen h-screen">
+        <svg style="width: 100%; height: 100%; position: fixed;" id="svg" tabindex="0"
+             class="w-full h-full whitespace-pre">
+            <g id="g"/>
+        </svg>
+    </main>
+</div>
+</body>
+</html>

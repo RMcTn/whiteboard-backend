@@ -1,0 +1,1 @@
+postgres will need CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
