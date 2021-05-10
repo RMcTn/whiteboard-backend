@@ -24,9 +24,9 @@
             }
 
             function appendPointToPath(path, point) {
-                const {x, y} = point;
+                const {X, Y} = point;
                 const pathContext = d3.path();
-                pathContext.bezierCurveTo(x, y, x, y, x, y);
+                pathContext.bezierCurveTo(X, Y, X, Y, X, Y);
                 const currentPathString = path.attr('d');
                 const appendedPathString = currentPathString + pathContext.toString();
                 path.attr('d', appendedPathString);
@@ -34,10 +34,10 @@
 
             function drawPath(id, points) {
                 const pathContext = d3.path();
-                pathContext.moveTo(points[0].x, points[0].y);
+                pathContext.moveTo(points[0].X, points[0].Y);
                 points = points.slice(1);
                 for (const point of points) {
-                    pathContext.bezierCurveTo(point.x, point.y, point.x, point.y, point.x, point.y);
+                    pathContext.bezierCurveTo(point.X, point.Y, point.X, point.Y, point.X, point.Y);
                 }
 
                 const newPath = d3.select(gElement).append('path');
@@ -105,13 +105,13 @@
                     .attr('d', currentDrawingPath.toString())
                     .attr('style', 'fill: none; stroke-linejoin: round; stroke-linecap: round; stroke: black;');
                 currentDrawingPoints.push({
-                    x: xLocal,
-                    y: yLocal,
+                    X: xLocal,
+                    Y: yLocal,
                 });
 
                 const point = {
-                    x: xLocal,
-                    y: yLocal,
+                    X: xLocal,
+                    Y: yLocal,
                 }
 
                 const message = {
@@ -133,13 +133,13 @@
                 currentPathDOM.attr('d', currentDrawingPath.toString());
 
                 currentDrawingPoints.push({
-                    x: xLocal,
-                    y: yLocal,
+                    X: xLocal,
+                    Y: yLocal,
                 });
                 // TODO: Consider smoothing currentDrawingPoints before emitting? Avoids all receiving clients having to smooth
                 const point = {
-                    x: xLocal,
-                    y: yLocal,
+                    X: xLocal,
+                    Y: yLocal,
                 };
 
                 const message = {
@@ -197,7 +197,8 @@
                         console.log(messages[i]);
                         const parsedMessage = JSON.parse(messages[i]);
                         if (parsedMessage.event === "New connection") {
-                            drawPath(parsedMessage.id, parsedMessage.points)
+                            console.log(parsedMessage);
+                            drawPath(parsedMessage.id, parsedMessage.data.points)
                             continue;
                         }
                         const existingPath = getPath(parsedMessage.id);

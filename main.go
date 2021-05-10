@@ -48,6 +48,8 @@ type Line struct {
 	Points    datatypes.JSON
 }
 
+var db *gorm.DB
+
 func main() {
 	// TODO: front end stuff to send x + y object
 	// TODO: format check in ws
@@ -58,7 +60,8 @@ func main() {
 	log.SetFlags(0)
 
 	dsn := "host=localhost user=postgres password=password dbname=whiteboard port=5432 sslmode=disable"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	var err error
+	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic("Failed to connect to database %v")
 	}
@@ -70,10 +73,10 @@ func main() {
 
 	newUuid, _ := uuid.NewUUID()
 
-	db.Create(&Line{Id: newUuid, Points: []byte(`[ {"X": 31, "Y": 53}, {"X": 153, "Y": 133}, {"X": 431, "Y": 221}]`)})
+	db.Create(&Line{Id: newUuid, Points: datatypes.JSON(`{ "points": [ {"X": 31, "Y": 53}, {"X": 153, "Y": 133}, {"X": 431, "Y": 221}] }`)})
 	var line Line
 	db.First(&line, newUuid)
-	db.Model(&Line{}).Where("Id = ?", newUuid).Update("points", []byte(`[{"X": 11, "Y: 33"}]`))
+	db.Model(&Line{}).Where("Id = ?", newUuid).Update("points", []byte(`{ "points": [{"X": 11, "Y": 33}] }`))
 	// TODO: Raw SQL query for upserting? Copy from backend socket project?
 
 	log.Printf("Line is: %v", line)
@@ -85,12 +88,18 @@ func main() {
 	var testMessageAllPointsForUUID TestMessageAllPointsForUUID
 	testMessageAllPointsForUUID.Event = "New connection"
 	err = json.Unmarshal(jsMessage, &testMessageAllPointsForUUID)
+	if err != nil {
+		log.Printf("Error: %v", err)
+	}
 	log.Printf("Test message is %v", testMessageAllPointsForUUID)
 	jsMessage, err = json.Marshal(&testMessageAllPointsForUUID)
 	log.Printf("Test json message is %s", jsMessage)
 
+	db.Exec(`INSERT INTO lines(id, points) VALUES(?, ?) ON CONFLICT (id) DO UPDATE SET points = jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || '[{"X": 111, "Y": 111}]'::jsonb)`, newUuid, `{ "points": [{"X": 3, "Y": 4}] }`)
 	// https://gorm.io/docs/create.html#Upsert-On-Conflict
 	//  const pathUpsert = `INSERT INTO ${tableNames.svgObject}(uuid, type, data, board_id) VALUES('${uuid}', 'path', '${data}', '${boardId}') ON CONFLICT (uuid) DO UPDATE SET data = jsonb_set(${tableNames.svgObject}.data::jsonb, array['points'], (${tableNames.svgObject}.data->'points')::jsonb || '[${JSON.stringify(msg.point)}]'::jsonb)`;
+	// Problem with gorm onConflict is that new value will overwrite old, rather than appending
+	// TODO: Check if gorm (with datatypes json) can append json columns at all
 
 	hub := newHub()
 	go hub.run()

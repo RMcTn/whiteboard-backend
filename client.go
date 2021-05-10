@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"log"
@@ -65,7 +66,7 @@ func (c *Client) readPump() {
 			c.conn.WriteMessage(websocket.TextMessage, []byte("CLOSING SINCE MESSAGE TOO BIG"))
 			break
 		}
-		// TODO: The message sent by the client will also be replayed back to themselves
+		// TODO: @FIX The message sent by the client will also be replayed back to themselves, stop this
 		message = bytes.TrimSpace(bytes.Replace(message, newLine, space, -1))
 		log.Printf("Message: %s", message)
 		log.Printf("Message length %d", len(message))
@@ -78,8 +79,11 @@ func (c *Client) readPump() {
 			continue
 		}
 		log.Printf("Message after unmarshal %v", testMessage)
+		log.Printf("Points: %v", testMessage.Point)
 		c.hub.points[testMessage.Id] = append(c.hub.points[testMessage.Id], testMessage.Point)
 		c.hub.broadcast <- message
+
+		db.Exec(`INSERT INTO lines(id, points) VALUES(?, ?) ON CONFLICT (id) DO UPDATE SET points = jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || ?::jsonb)`, testMessage.Id, fmt.Sprintf(`{ "points": [{"X": %f, "Y": %f}] }`, testMessage.Point.X, testMessage.Point.Y), fmt.Sprintf(`[{"X": %f, "Y": %f}]`, testMessage.Point.X, testMessage.Point.Y))
 	}
 }
 
