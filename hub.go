@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"log"
 )
 
@@ -19,8 +20,6 @@ type Hub struct {
 
 	// Unregister requests from clients.
 	unregister chan *Client
-
-	points map[uuid.UUID][]Point
 }
 
 func newHub() *Hub {
@@ -29,14 +28,13 @@ func newHub() *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		clients:    make(map[*Client]bool),
-		points:     make(map[uuid.UUID][]Point),
 	}
 }
 
 type TestMessageAllPointsForUUID struct {
-	Id     uuid.UUID `json:"id"`
-	Points []Point   `json:"points"`
-	Event  string    `json:"event"`
+	Id    uuid.UUID      `json:"id"`
+	Data  datatypes.JSON `json:"data"`
+	Event string         `json:"event"`
 }
 
 func (h *Hub) run() {
@@ -44,17 +42,21 @@ func (h *Hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
-			// send the points map
-			for k, v := range h.points {
-				log.Printf("%v %v", k, v)
-				uuidAndPoints := TestMessageAllPointsForUUID{Id: k, Points: v, Event: "New connection"}
+			// Grab all points from DB and send
+			var lines []Line
+			db.Find(&lines)
+			for _, l := range lines {
+				log.Printf("Line is %v", l)
+				log.Printf("Line points is %s", l.Points)
+				uuidAndPoints := TestMessageAllPointsForUUID{Id: l.Id, Data: l.Points, Event: "New connection"}
 				jsonMessage, err := json.Marshal(uuidAndPoints)
 				if err != nil {
 					log.Printf("Error marshalling uuid and points: %v", err)
 					break
 				}
+				log.Printf("Sending message to clients %s", jsonMessage)
 				client.send <- jsonMessage
-				log.Printf(string(jsonMessage))
+
 			}
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {

@@ -95,12 +95,6 @@ func main() {
 	jsMessage, err = json.Marshal(&testMessageAllPointsForUUID)
 	log.Printf("Test json message is %s", jsMessage)
 
-	db.Exec(`INSERT INTO lines(id, points) VALUES(?, ?) ON CONFLICT (id) DO UPDATE SET points = jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || '[{"X": 111, "Y": 111}]'::jsonb)`, newUuid, `{ "points": [{"X": 3, "Y": 4}] }`)
-	// https://gorm.io/docs/create.html#Upsert-On-Conflict
-	//  const pathUpsert = `INSERT INTO ${tableNames.svgObject}(uuid, type, data, board_id) VALUES('${uuid}', 'path', '${data}', '${boardId}') ON CONFLICT (uuid) DO UPDATE SET data = jsonb_set(${tableNames.svgObject}.data::jsonb, array['points'], (${tableNames.svgObject}.data->'points')::jsonb || '[${JSON.stringify(msg.point)}]'::jsonb)`;
-	// Problem with gorm onConflict is that new value will overwrite old, rather than appending
-	// TODO: Check if gorm (with datatypes json) can append json columns at all
-
 	hub := newHub()
 	go hub.run()
 

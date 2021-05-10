@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"log"
 	"time"
 )
@@ -79,11 +82,16 @@ func (c *Client) readPump() {
 			continue
 		}
 		log.Printf("Message after unmarshal %v", testMessage)
-		log.Printf("Points: %v", testMessage.Point)
-		c.hub.points[testMessage.Id] = append(c.hub.points[testMessage.Id], testMessage.Point)
 		c.hub.broadcast <- message
 
-		db.Exec(`INSERT INTO lines(id, points) VALUES(?, ?) ON CONFLICT (id) DO UPDATE SET points = jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || ?::jsonb)`, testMessage.Id, fmt.Sprintf(`{ "points": [{"X": %f, "Y": %f}] }`, testMessage.Point.X, testMessage.Point.Y), fmt.Sprintf(`[{"X": %f, "Y": %f}]`, testMessage.Point.X, testMessage.Point.Y))
+		pointsFormatted := fmt.Sprintf(`{"points": [{"X": %f, "Y": %f}]}`, testMessage.Point.X, testMessage.Point.Y)
+		line := Line{Id: testMessage.Id, Points: datatypes.JSON(pointsFormatted)}
+		// TODO: Update updated time to time now
+		db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "id"}},
+			DoUpdates: clause.Assignments(map[string]interface{}{"points": gorm.Expr(`jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || ?::jsonb)`, fmt.Sprintf(`[{"X": %f, "Y": %f}]`, testMessage.Point.X, testMessage.Point.Y))}),
+		}).Create(&line)
+		//Before gorm on conflict: db.Exec(`INSERT INTO lines(id, points) VALUES(?, ?) ON CONFLICT (id) DO UPDATE SET points = jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || ?::jsonb)`, testMessage.Id, fmt.Sprintf(`{ "points": [{"X": %f, "Y": %f}] }`, testMessage.Point.X, testMessage.Point.Y), fmt.Sprintf(`[{"X": %f, "Y": %f}]`, testMessage.Point.X, testMessage.Point.Y))
 	}
 }
 
