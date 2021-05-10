@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -51,11 +50,9 @@ type Line struct {
 var db *gorm.DB
 
 func main() {
-	// TODO: front end stuff to send x + y object
 	// TODO: format check in ws
 
 	// TODO: For "room/board" concept for now, just have 2-3 boards that are joinable by clicking a button
-	// TODO: get points persisting to db, prob do it before room/board concept as well
 	flag.Parse()
 	log.SetFlags(0)
 
@@ -70,30 +67,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to migrate %v: ", err)
 	}
-
-	newUuid, _ := uuid.NewUUID()
-
-	db.Create(&Line{Id: newUuid, Points: datatypes.JSON(`{ "points": [ {"X": 31, "Y": 53}, {"X": 153, "Y": 133}, {"X": 431, "Y": 221}] }`)})
-	var line Line
-	db.First(&line, newUuid)
-	db.Model(&Line{}).Where("Id = ?", newUuid).Update("points", []byte(`{ "points": [{"X": 11, "Y": 33}] }`))
-	// TODO: Raw SQL query for upserting? Copy from backend socket project?
-
-	log.Printf("Line is: %v", line)
-	var testMessage TestMessageAllPointsForUUID
-	testMessage.Event = "New connection"
-
-	jsMessage, err := json.Marshal(&line)
-	log.Printf("Json is %s", jsMessage)
-	var testMessageAllPointsForUUID TestMessageAllPointsForUUID
-	testMessageAllPointsForUUID.Event = "New connection"
-	err = json.Unmarshal(jsMessage, &testMessageAllPointsForUUID)
-	if err != nil {
-		log.Printf("Error: %v", err)
-	}
-	log.Printf("Test message is %v", testMessageAllPointsForUUID)
-	jsMessage, err = json.Marshal(&testMessageAllPointsForUUID)
-	log.Printf("Test json message is %s", jsMessage)
 
 	hub := newHub()
 	go hub.run()

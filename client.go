@@ -69,7 +69,7 @@ func (c *Client) readPump() {
 			c.conn.WriteMessage(websocket.TextMessage, []byte("CLOSING SINCE MESSAGE TOO BIG"))
 			break
 		}
-		// TODO: @FIX The message sent by the client will also be replayed back to themselves, stop this
+		// TODO: @FIX The message sent by the client will also be replayed back to themselves, stop this (could this be used as a "received message" on client side to show success?, or alert user to dropped connectivity?)
 		message = bytes.TrimSpace(bytes.Replace(message, newLine, space, -1))
 		log.Printf("Message: %s", message)
 		log.Printf("Message length %d", len(message))
