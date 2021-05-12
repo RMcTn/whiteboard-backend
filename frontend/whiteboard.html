@@ -14,6 +14,7 @@
             const idPrefix = 'U'; //HTML id attribute can't start with a number, prepend the UUID when using it with this
             const idSelector = 'id';
 
+
             // Returns path element with given uuid otherwise false
             function getPath(id) {
                 const result = d3.select(`path[${idSelector}=${idPrefix}${id}]`);
@@ -177,9 +178,14 @@
                 }
             }
 
-
             if (window["WebSocket"]) {
-                conn = new WebSocket("ws://" + document.location.host + "/ws");
+                const params = new URLSearchParams(window.location.search);
+                let board = params.get('boardId')
+                console.log("Board id: " + board);
+                if (board === null) {
+                    board = 1
+                }
+                conn = new WebSocket("ws://" + document.location.host + "/ws?board=" + board);
                 conn.onclose = function (evt) {
                     console.log(evt);
                     if (evt.code === 1009) {
@@ -191,13 +197,14 @@
                     item.innerHTML = "<b>Connection closed.</b>";
                     appendLog(item);
                 };
+
                 conn.onmessage = function (evt) {
                     let messages = evt.data.split('\n');
                     for (let i = 0; i < messages.length; i++) {
-                        console.log(messages[i]);
+                        // console.log(messages[i]);
                         const parsedMessage = JSON.parse(messages[i]);
                         if (parsedMessage.event === "New connection") {
-                            console.log(parsedMessage);
+                            // console.log(parsedMessage);
                             drawPath(parsedMessage.id, parsedMessage.data.points)
                             continue;
                         }
@@ -216,7 +223,7 @@
             }
 
             window.onmousedown = function (event) {
-                conn.send(JSON.stringify({x: event.x, y: event.y}));
+                // conn.send(JSON.stringify({x: event.x, y: event.y}));
             }
         };
     </script>

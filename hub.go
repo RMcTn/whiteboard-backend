@@ -9,6 +9,9 @@ import (
 
 type Hub struct {
 	// TODO: Hub to become each "board room" and send points to clients connected there
+
+	boardId int
+
 	// Registered clients.
 	clients map[*Client]bool
 
@@ -22,8 +25,9 @@ type Hub struct {
 	unregister chan *Client
 }
 
-func newHub() *Hub {
+func newHub(boardId int) *Hub {
 	return &Hub{
+		boardId:    boardId,
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
@@ -44,17 +48,15 @@ func (h *Hub) run() {
 			h.clients[client] = true
 			// Grab all points from DB and send
 			var lines []Line
-			db.Find(&lines)
+			db.Where("board_id = ?", h.boardId).Find(&lines)
 			for _, l := range lines {
-				log.Printf("Line is %v", l)
-				log.Printf("Line points is %s", l.Points)
 				uuidAndPoints := TestMessageAllPointsForUUID{Id: l.Id, Data: l.Points, Event: "New connection"}
 				jsonMessage, err := json.Marshal(uuidAndPoints)
 				if err != nil {
 					log.Printf("Error marshalling uuid and points: %v", err)
 					break
 				}
-				log.Printf("Sending message to clients %s", jsonMessage)
+				//log.Printf("Sending message to clients %s", jsonMessage)
 				client.send <- jsonMessage
 
 			}

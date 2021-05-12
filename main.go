@@ -34,17 +34,18 @@ type Point struct {
 	Y float32 `json:"y"`
 }
 
-type TestMessage struct {
-	Id    uuid.UUID
-	Point Point
-}
-
 type Line struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 	Id        uuid.UUID      `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
 	Points    datatypes.JSON
+	BoardId   int
+	Board     Board
+}
+
+type Board struct {
+	gorm.Model
 }
 
 var db *gorm.DB
@@ -63,13 +64,16 @@ func main() {
 		panic("Failed to connect to database %v")
 	}
 
+	err = db.AutoMigrate(&Board{})
+	if err != nil {
+		log.Fatalf("Failed to migrate %v: ", err)
+	}
 	err = db.AutoMigrate(&Line{})
 	if err != nil {
 		log.Fatalf("Failed to migrate %v: ", err)
 	}
 
-	hub := newHub()
-	go hub.run()
+	boardHubs := make([]*Hub, 0)
 
 	// TODO: Use addr
 	r := gin.Default()
@@ -79,7 +83,8 @@ func main() {
 		})
 	})
 	r.GET("/ws", func(context *gin.Context) {
-		serveWs(hub, context)
+		// TODO: Surely can just pass a slice?
+		boardHubs = serveWs(boardHubs, context)
 	})
 	r.GET("/", serveHome)
 	r.Run(":8081")

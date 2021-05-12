@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"log"
+	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -31,6 +35,11 @@ var (
 	newLine = []byte{'\n'}
 	space   = []byte{' '}
 )
+
+type DrawnPointMessage struct {
+	Id    uuid.UUID
+	Point Point
+}
 
 var upgrader = websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
 
@@ -73,25 +82,25 @@ func (c *Client) readPump() {
 		message = bytes.TrimSpace(bytes.Replace(message, newLine, space, -1))
 		log.Printf("Message: %s", message)
 		log.Printf("Message length %d", len(message))
-		var testMessage TestMessage
-		err = json.Unmarshal(message, &testMessage)
+		var drawnPointMessage DrawnPointMessage
+		err = json.Unmarshal(message, &drawnPointMessage)
 		if err != nil {
 			log.Printf("Error unmarshalling message %s: %v", message, err)
 			// TODO: Should return something here?
 			c.conn.WriteMessage(websocket.TextMessage, []byte("Invalid UUID"))
 			continue
 		}
-		log.Printf("Message after unmarshal %v", testMessage)
+		log.Printf("Message after unmarshal %v", drawnPointMessage)
 		c.hub.broadcast <- message
 
-		pointsFormatted := fmt.Sprintf(`{"points": [{"X": %f, "Y": %f}]}`, testMessage.Point.X, testMessage.Point.Y)
-		line := Line{Id: testMessage.Id, Points: datatypes.JSON(pointsFormatted)}
+		pointsFormatted := fmt.Sprintf(`{"points": [{"X": %f, "Y": %f}]}`, drawnPointMessage.Point.X, drawnPointMessage.Point.Y)
+		line := Line{Id: drawnPointMessage.Id, Points: datatypes.JSON(pointsFormatted), BoardId: c.hub.boardId}
 		// TODO: Update updated time to time now
 		db.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.Assignments(map[string]interface{}{"points": gorm.Expr(`jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || ?::jsonb)`, fmt.Sprintf(`[{"X": %f, "Y": %f}]`, testMessage.Point.X, testMessage.Point.Y))}),
+			DoUpdates: clause.Assignments(map[string]interface{}{"points": gorm.Expr(`jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || ?::jsonb)`, fmt.Sprintf(`[{"X": %f, "Y": %f}]`, drawnPointMessage.Point.X, drawnPointMessage.Point.Y))}),
 		}).Create(&line)
-		//Before gorm on conflict: db.Exec(`INSERT INTO lines(id, points) VALUES(?, ?) ON CONFLICT (id) DO UPDATE SET points = jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || ?::jsonb)`, testMessage.Id, fmt.Sprintf(`{ "points": [{"X": %f, "Y": %f}] }`, testMessage.Point.X, testMessage.Point.Y), fmt.Sprintf(`[{"X": %f, "Y": %f}]`, testMessage.Point.X, testMessage.Point.Y))
+		//Before gorm on conflict: db.Exec(`INSERT INTO lines(id, points) VALUES(?, ?) ON CONFLICT (id) DO UPDATE SET points = jsonb_set(lines.points::jsonb, array['points'], (lines.points->'points')::jsonb || ?::jsonb)`, drawnPointMessage.Id, fmt.Sprintf(`{ "points": [{"X": %f, "Y": %f}] }`, drawnPointMessage.Point.X, drawnPointMessage.Point.Y), fmt.Sprintf(`[{"X": %f, "Y": %f}]`, drawnPointMessage.Point.X, drawnPointMessage.Point.Y))
 	}
 }
 
@@ -143,16 +152,46 @@ func (c *Client) writePump() {
 	}
 }
 
-func serveWs(hub *Hub, c *gin.Context) {
+func serveWs(boardHubs []*Hub, c *gin.Context) []*Hub {
+	boardId, err := strconv.Atoi(c.Request.URL.Query()["board"][0])
+	if err != nil {
+		http.Error(c.Writer, "Requires board id", http.StatusBadRequest)
+	}
+	log.Printf("Board id: %v", boardId)
+	// TODO: Check if board even exists
+	var board Board
+	err = db.First(&board, boardId).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// TODO: Better http error code?
+			http.Error(c.Writer, "Non existent board", http.StatusBadRequest)
+			return boardHubs
+		}
+	}
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("error: %v", err)
-		return
+		return boardHubs
 	}
 
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	// TODO: Auth
+	var boardHubToUse *Hub
+	// TODO: boardHubs could just be a map?
+	for _, boardHub := range boardHubs {
+		if boardHub.boardId == boardId {
+			boardHubToUse = boardHub
+		}
+	}
+	if boardHubToUse == nil {
+		boardHubToUse = newHub(boardId)
+		go boardHubToUse.run()
+		boardHubs = append(boardHubs, boardHubToUse)
+	}
+	client := &Client{hub: boardHubToUse, conn: conn, send: make(chan []byte, 256)}
 	client.hub.register <- client
 
 	go client.writePump()
 	go client.readPump()
+	return boardHubs
 }
