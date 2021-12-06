@@ -1,0 +1,19 @@
+<head>
+{{template "application" }}
+</head>
+SIGNUP
+<turbo-frame id="user-new">
+	<form action="/signup/" method="POST" data-turbo-frame="_top">
+		<div>
+			TODO: Email validation
+			<label for="email">Email: </label>
+			<input type="text" id="email" name="email"></input>
+		</div>
+		<div>
+			TODO: Password validation
+			<label for="password">Password: </label>
+			<input type="password" id="password" name="password"></input>
+		</div>
+		<div><input type="submit" value="Signup"></div>
+	</form>
+</turbo-frame>

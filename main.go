@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/datatypes"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -64,7 +65,15 @@ type Line struct {
 
 type Board struct {
 	gorm.Model
-	BoardName string
+	BoardName string `gorm:"not null"`
+	// TODO: Has many users
+	// TODO: Has an owner
+}
+
+type User struct {
+	gorm.Model
+	Email string `gorm:"unique;not null"`
+	PasswordHash string `gorm:"not null"`
 }
 
 var db *gorm.DB
@@ -102,6 +111,62 @@ func (env *Env) GetBoard(c *gin.Context) {
 	// render template
 }
 
+func (env *Env) CreateUser(c *gin.Context) {
+	// TODO: Validate email
+	email := c.PostForm("email")
+
+	// TODO: Validate password
+	password := c.PostForm("password")
+
+	// TODO: Handle err
+	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	user := User{Email: email, PasswordHash: string(passwordHash)}
+	env.db.Create(&user)
+	log.Printf("New user created: %s", user.Email)
+	log.Println(string(passwordHash))
+	// TODO: Redirect to user page or something
+	c.Redirect(http.StatusFound, "STILL TO DO")
+}
+
+func (env *Env) NewUser(c *gin.Context) {
+	err := templates.ExecuteTemplate(c.Writer, "newUser.html", nil)
+
+	if err != nil {
+		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (env *Env) SignInUser(c *gin.Context) {
+	// TODO: Validate email
+	email := c.PostForm("email")
+
+	// TODO: Validate password
+	password := c.PostForm("password")
+
+
+	var user = User{}
+	env.db.Where("email = ?", email).First(&user)
+	log.Println(user)
+
+	// TODO: Handle err
+	err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+	if err != nil {
+		http.Error(c.Writer, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	log.Println("Success logging in")
+	// TODO: Success, create session or something and redirect to user page
+	c.Redirect(http.StatusFound, "STILL TO DO")
+}
+
+func (env *Env) SignInPage(c *gin.Context) {
+	err := templates.ExecuteTemplate(c.Writer, "signIn.html", nil)
+
+	if err != nil {
+		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func main() {
 	// TODO: format check in ws
 
@@ -124,6 +189,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to migrate %v: ", err)
 	}
+	err = db.AutoMigrate(&User{})
+	if err != nil {
+		log.Fatalf("Failed to migrate %v: ", err)
+	}
 
 	boardHubs := make([]*Hub, 0)
 
@@ -143,5 +212,9 @@ func main() {
 	r.POST("/board", env.PostBoard)
 	r.GET("/board", env.NewBoard)
 	r.GET("/board/:boardId", env.GetBoard)
+	r.POST("/signup", env.CreateUser)
+	r.GET("/signup", env.NewUser)
+	r.POST("/signin", env.SignInUser)
+	r.GET("/signin", env.SignInPage)
 	r.Run(":8081")
 }
