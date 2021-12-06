@@ -1,0 +1,9 @@
+<head>
+{{template "application" }}
+</head>
+<turbo-frame id="board-new">
+	<form action="/board/" method="POST" data-turbo-frame="_top">
+		<div><input type="text" id="boardName" name="boardName"></input></div>
+		<div><input type="submit" value="Create new board"></div>
+	</form>
+</turbo-frame>

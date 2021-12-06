@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+	{{template "application" }}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.1.0/uuidv4.min.js"></script>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <script type="text/javascript">
-        window.onload = function () {
+	    addEventListener("turbo:load", () => {
             let conn;
             let log = document.getElementById("log");
             let svgElement = document.getElementById("svg");
@@ -225,13 +226,15 @@
             window.onmousedown = function (event) {
                 // conn.send(JSON.stringify({x: event.x, y: event.y}));
             }
-        };
+        });
     </script>
 </head>
 <body>
 <div id="log">
 
 </div>
+{{template "footer" .}}
+<p>Board name {{.BoardName}}</p>
 <div class="h-full m-0 p-0 overflow-hidden overflow-y-hidden">
     <main class="bg-white overflow-hidden w-screen h-screen">
         <svg style="width: 100%; height: 100%; position: fixed;" id="svg" tabindex="0"

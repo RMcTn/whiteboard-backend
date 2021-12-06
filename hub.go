@@ -2,9 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"log"
+
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
-	"log"
 )
 
 type Hub struct {

@@ -2,17 +2,26 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"html/template"
+	"log"
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
-	"net/http"
-	"time"
 )
 
 var addr = flag.String("addr", "localhost:8080", "http service address")
+
+var templates = template.Must(template.ParseGlob("frontend/*.html"))
+
+type Env struct {
+	db *gorm.DB
+}
 
 func serveHome(c *gin.Context) {
 	writer := c.Writer
@@ -26,7 +35,16 @@ func serveHome(c *gin.Context) {
 		http.Error(writer, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	http.ServeFile(writer, request, "frontend/whiteboard.html")
+
+	board := Board{}
+	// TODO: Error handle here
+	db.First(&board, c.Query("boardId"))
+	err := templates.ExecuteTemplate(writer, "whiteboard.html", board)
+
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+	}
+//	http.ServeFile(writer, request, "frontend/whiteboard.html")
 }
 
 type Point struct {
@@ -46,9 +64,43 @@ type Line struct {
 
 type Board struct {
 	gorm.Model
+	BoardName string
 }
 
 var db *gorm.DB
+
+
+func (env *Env) PostBoard(c *gin.Context) {
+	boardName := c.PostForm("boardName")
+	board := Board{BoardName: boardName}
+	env.db.Create(&board)
+	log.Printf("New board created %d with name %s", board.ID, board.BoardName)
+	c.Redirect(http.StatusFound, fmt.Sprintf("?boardId=%d", board.ID))
+}
+
+func (env *Env) NewBoard(c *gin.Context) {
+	err := templates.ExecuteTemplate(c.Writer, "newBoard.html", nil)
+
+	if err != nil {
+		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (env *Env) GetBoard(c *gin.Context) {
+	boardId := c.Params.ByName("boardId")
+	log.Printf("BoardId: %s", boardId)
+	board := Board{}
+	db.First(&board, boardId)
+	log.Printf("Boardname %s id %d\n", board.BoardName, board.ID)
+	log.Printf("=========================")
+
+	err := templates.ExecuteTemplate(c.Writer, "boardDetails.html", board)
+
+	if err != nil {
+		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+	}
+	// render template
+}
 
 func main() {
 	// TODO: format check in ws
@@ -77,6 +129,7 @@ func main() {
 
 	// TODO: Use addr
 	r := gin.Default()
+	env := &Env{db: db}
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Pong",
@@ -87,5 +140,8 @@ func main() {
 		boardHubs = serveWs(boardHubs, context)
 	})
 	r.GET("/", serveHome)
+	r.POST("/board", env.PostBoard)
+	r.GET("/board", env.NewBoard)
+	r.GET("/board/:boardId", env.GetBoard)
 	r.Run(":8081")
 }
