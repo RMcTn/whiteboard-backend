@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -159,14 +160,39 @@ func (env *Env) NewBoard(c *gin.Context) {
 }
 
 func (env *Env) GetBoard(c *gin.Context) {
+	sessionId, err := getSessionIdFromCookie(c)
+	if err != nil {
+		panic(err)
+	}
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+
 	boardId := c.Params.ByName("boardId")
+	boardMember := BoardMember{}
+
+	// TODO: Check if there's a result from this if the query fails
+	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, user.ID)
+
+	if boardMember.BoardID == 0 {
+		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+		return;
+	}
+
+
 	log.Printf("BoardId: %s", boardId)
 	board := Board{}
 	db.First(&board, boardId)
 	log.Printf("Boardname %s id %d\n", board.BoardName, board.ID)
 	log.Printf("=========================")
 
-	err := templates.ExecuteTemplate(c.Writer, "boardDetails.html", board)
+	err = templates.ExecuteTemplate(c.Writer, "boardDetails.html", board)
 
 	if err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
@@ -180,14 +206,21 @@ func (env *Env) CreateUser(c *gin.Context) {
 
 	// TODO: Validate password
 	password := c.PostForm("password")
-
+	// TODO: handle this error
+	sessionId, err := getSessionIdFromCookie(c)
+	user, err := env.getUserFromSession(sessionId)
+	if err == nil {
+		userUrl := fmt.Sprintf("/user/%d", user.ID)
+		c.Redirect(http.StatusFound, userUrl)
+		return
+	}
 	// TODO: Handle err
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	user := User{Email: email, PasswordHash: string(passwordHash)}
+	user = User{Email: email, PasswordHash: string(passwordHash)}
 	env.db.Create(&user)
 	log.Printf("New user created: %s", user.Email)
 
-	sessionId := uuid.New()
+	sessionId = uuid.New()
 	env.sessions[sessionId] = email
 	c.SetCookie("sessionId", sessionId.String(), 0, "/", "localhost", false, false)
 
@@ -269,14 +302,36 @@ func (env *Env) SignInPage(c *gin.Context) {
 }
 
 func (env *Env) GetUser(c *gin.Context) {
+	sessionId, err := getSessionIdFromCookie(c)
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+		return;
+	}
+
 	userId := c.Params.ByName("userId")
+
+	// TODO: Error check this conversion
+	userIdConv, _ := strconv.Atoi(userId)
+	if user.ID != uint(userIdConv){
+		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+		return;
+	}
 	log.Printf("UserId: %s", userId)
-	user := User{}
+	user = User{}
 	db.First(&user, userId)
 	log.Printf("User %s id %d\n", user.Email, user.ID)
 	log.Printf("=========================")
 
-	err := templates.ExecuteTemplate(c.Writer, "user.html", user)
+	err = templates.ExecuteTemplate(c.Writer, "user.html", user)
 
 	if err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
