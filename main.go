@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/datatypes"
 	"gorm.io/driver/postgres"
@@ -22,6 +23,24 @@ var templates = template.Must(template.ParseGlob("frontend/*.html"))
 
 type Env struct {
 	db *gorm.DB
+	// TODO: Should this be a map to user ID?
+	// TODO: Add time to live to the session id 
+	sessions map[uuid.UUID]string
+}
+
+func (env *Env) getUserFromSession(sessionId uuid.UUID) (User, error) {
+		email, ok := env.sessions[sessionId]
+		if ok {
+			log.Printf("Session %s is valid", sessionId.String())
+			user := User{}
+			// TODO: Check the err here
+			env.db.Where("email = ?", email).First(&user)
+			return user, nil
+		} else {
+			return User{}, errors.New(fmt.Sprintf("Session %s not found", sessionId.String()))
+			
+		}
+
 }
 
 func serveHome(c *gin.Context) {
@@ -123,13 +142,32 @@ func (env *Env) CreateUser(c *gin.Context) {
 	user := User{Email: email, PasswordHash: string(passwordHash)}
 	env.db.Create(&user)
 	log.Printf("New user created: %s", user.Email)
-	log.Println(string(passwordHash))
-	// TODO: Redirect to user page or something
-	c.Redirect(http.StatusFound, "STILL TO DO")
+
+	sessionId := uuid.New()
+	env.sessions[sessionId] = email
+	c.SetCookie("sessionId", sessionId.String(), 0, "/", "localhost", false, false)
+
+	userUrl := fmt.Sprintf("/user/%d", user.ID)
+	c.Redirect(http.StatusFound, userUrl)
 }
 
 func (env *Env) NewUser(c *gin.Context) {
-	err := templates.ExecuteTemplate(c.Writer, "newUser.html", nil)
+	cookie, err := c.Cookie("sessionId")
+
+	if err != nil {
+		log.Println("No existing session id from cookies")
+	} else {
+		log.Printf("Got cookie %s", cookie)
+		sessionId, _ := uuid.Parse(cookie)
+		user, err := env.getUserFromSession(sessionId)
+		if err == nil {
+			userUrl := fmt.Sprintf("/user/%d", user.ID)
+			c.Redirect(http.StatusFound, userUrl)
+			return
+		}
+		log.Printf("Could not find valid session for %s", cookie)
+	}
+	err = templates.ExecuteTemplate(c.Writer, "newUser.html", nil)
 
 	if err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
@@ -144,7 +182,7 @@ func (env *Env) SignInUser(c *gin.Context) {
 	password := c.PostForm("password")
 
 
-	var user = User{}
+	user := User{}
 	env.db.Where("email = ?", email).First(&user)
 	log.Println(user)
 
@@ -155,12 +193,46 @@ func (env *Env) SignInUser(c *gin.Context) {
 		return
 	}
 	log.Println("Success logging in")
-	// TODO: Success, create session or something and redirect to user page
-	c.Redirect(http.StatusFound, "STILL TO DO")
+
+	sessionId := uuid.New()
+	env.sessions[sessionId] = email
+
+	c.SetCookie("sessionId", sessionId.String(), 0, "/", "localhost", false, false)
+	c.Redirect(http.StatusFound, fmt.Sprintf("/user/%d", user.ID))
 }
 
 func (env *Env) SignInPage(c *gin.Context) {
-	err := templates.ExecuteTemplate(c.Writer, "signIn.html", nil)
+	cookie, err := c.Cookie("sessionId")
+
+	if err != nil {
+		log.Println("No existing session id from cookies")
+	} else {
+		log.Printf("Got cookie %s", cookie)
+		sessionId, _ := uuid.Parse(cookie)
+		user, err := env.getUserFromSession(sessionId)
+		if err == nil {
+			userUrl := fmt.Sprintf("/user/%d", user.ID)
+			c.Redirect(http.StatusFound, userUrl)
+			return
+		}
+		log.Printf("Could not find valid session for %s", cookie)
+	}
+	err = templates.ExecuteTemplate(c.Writer, "signIn.html", nil)
+
+	if err != nil {
+		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (env *Env) GetUser(c *gin.Context) {
+	userId := c.Params.ByName("userId")
+	log.Printf("UserId: %s", userId)
+	user := User{}
+	db.First(&user, userId)
+	log.Printf("User %s id %d\n", user.Email, user.ID)
+	log.Printf("=========================")
+
+	err := templates.ExecuteTemplate(c.Writer, "user.html", user)
 
 	if err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
@@ -198,7 +270,7 @@ func main() {
 
 	// TODO: Use addr
 	r := gin.Default()
-	env := &Env{db: db}
+	env := &Env{db: db, sessions: make(map[uuid.UUID]string)}
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Pong",
@@ -216,5 +288,6 @@ func main() {
 	r.GET("/signup", env.NewUser)
 	r.POST("/signin", env.SignInUser)
 	r.GET("/signin", env.SignInPage)
+	r.GET("/user/:userId", env.GetUser)
 	r.Run(":8081")
 }
