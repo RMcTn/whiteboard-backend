@@ -43,6 +43,18 @@ func (env *Env) getUserFromSession(sessionId uuid.UUID) (User, error) {
 
 }
 
+func getSessionIdFromCookie(c *gin.Context) (uuid.UUID, error) {
+	cookie, err := c.Cookie("sessionId")
+	if err != nil {
+		return uuid.Nil, err
+	}
+	sessionId, err := uuid.Parse(cookie)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return sessionId, nil
+}
+
 func serveHome(c *gin.Context) {
 	writer := c.Writer
 	request := c.Request
@@ -95,19 +107,51 @@ type User struct {
 	PasswordHash string `gorm:"not null"`
 }
 
+type BoardMember struct {
+	BoardID uint `gorm:"primaryKey;autoincrement:false"`
+	UserID uint `gorm:"primaryKey;autoincrement:false"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
 var db *gorm.DB
 
 
 func (env *Env) PostBoard(c *gin.Context) {
+	sessionId, err := getSessionIdFromCookie(c)
+	if err != nil {
+		panic(err)
+	}
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+
 	boardName := c.PostForm("boardName")
 	board := Board{BoardName: boardName}
+	// TODO: Check for errors
 	env.db.Create(&board)
 	log.Printf("New board created %d with name %s", board.ID, board.BoardName)
+	BoardMember := BoardMember{BoardID: board.ID, UserID: user.ID}
+	// TODO: Check for errors
+	env.db.Create(&BoardMember)
 	c.Redirect(http.StatusFound, fmt.Sprintf("?boardId=%d", board.ID))
 }
 
 func (env *Env) NewBoard(c *gin.Context) {
-	err := templates.ExecuteTemplate(c.Writer, "newBoard.html", nil)
+	sessionId, err := getSessionIdFromCookie(c)
+	if err != nil {
+		panic(err)
+	}
+	_, err = env.getUserFromSession(sessionId)
+	if err != nil {
+		// TODO: Doesn't redirect due to turbo
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	err = templates.ExecuteTemplate(c.Writer, "newBoard.html", nil)
 
 	if err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
@@ -262,6 +306,10 @@ func main() {
 		log.Fatalf("Failed to migrate %v: ", err)
 	}
 	err = db.AutoMigrate(&User{})
+	if err != nil {
+		log.Fatalf("Failed to migrate %v: ", err)
+	}
+	err = db.AutoMigrate(&BoardMember{})
 	if err != nil {
 		log.Fatalf("Failed to migrate %v: ", err)
 	}
