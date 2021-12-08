@@ -338,6 +338,33 @@ func (env *Env) GetUser(c *gin.Context) {
 	}
 }
 
+func (env *Env) GetBoardsForUser(c *gin.Context) {
+	sessionId, err := getSessionIdFromCookie(c)
+	if err != nil {
+		panic(err)
+	}
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	// get all boardmembers where userid = user.id
+	// join on boards table on boardID = board.id
+	rows, err := env.db.Table("board_members").Select("boards.ID").Joins("JOIN boards on boards.id = board_members.board_id").Where("board_members.user_id = ?", user.ID).Rows()
+
+	boardIds := []int{}
+	for rows.Next() {
+		boardId := 0
+		rows.Scan(&boardId)
+		boardIds = append(boardIds, boardId)
+	}
+	err = templates.ExecuteTemplate(c.Writer, "boards.html", boardIds)
+
+	if err != nil {
+		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func main() {
 	// TODO: format check in ws
 
@@ -392,5 +419,6 @@ func main() {
 	r.POST("/signin", env.SignInUser)
 	r.GET("/signin", env.SignInPage)
 	r.GET("/user/:userId", env.GetUser)
+	r.GET("/boards", env.GetBoardsForUser)
 	r.Run(":8081")
 }

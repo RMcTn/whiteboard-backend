@@ -1,0 +1,8 @@
+<head>
+{{template "application" }}
+</head>
+<ul>
+{{range .}}
+<li><a href="/board/{{.}}">Board {{.}}</a></li>
+{{end}}
+</ul>
