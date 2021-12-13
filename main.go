@@ -197,7 +197,6 @@ func (env *Env) GetBoard(c *gin.Context) {
 	if err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 	}
-	// render template
 }
 
 func (env *Env) CreateUser(c *gin.Context) {
@@ -408,7 +407,12 @@ func main() {
 	})
 	r.GET("/ws", func(context *gin.Context) {
 		// TODO: Surely can just pass a slice?
-		boardHubs = serveWs(boardHubs, context)
+		tempBoardHubs, err := env.serveWs(boardHubs, context)
+		if err != nil {
+			log.Printf("User couldn't join board")
+			return
+		}
+		boardHubs = tempBoardHubs
 	})
 	r.GET("/", serveHome)
 	r.POST("/board", env.PostBoard)

@@ -4,6 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -11,10 +16,6 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"log"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 const (
@@ -152,7 +153,7 @@ func (c *Client) writePump() {
 	}
 }
 
-func serveWs(boardHubs []*Hub, c *gin.Context) []*Hub {
+func (env *Env) serveWs(boardHubs []*Hub, c *gin.Context) ([]*Hub, error) {
 	boardId, err := strconv.Atoi(c.Request.URL.Query()["board"][0])
 	if err != nil {
 		http.Error(c.Writer, "Requires board id", http.StatusBadRequest)
@@ -165,17 +166,36 @@ func serveWs(boardHubs []*Hub, c *gin.Context) []*Hub {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// TODO: Better http error code?
 			http.Error(c.Writer, "Non existent board", http.StatusBadRequest)
-			return boardHubs
+			return boardHubs, nil
 		}
+	}
+
+	// TODO: SPEEDUP: This is quite slow now, too many db calls potentially?
+	// TODO: Handle this err
+	sessionId, _ := getSessionIdFromCookie(c)
+	// TODO: Handle this err
+	user, _ := env.getUserFromSession(sessionId)
+
+	boardMember := BoardMember{}
+
+	// TODO: Check if there's a result from this if the query fails
+	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, user.ID)
+
+	if boardMember.BoardID == 0 {
+		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+		return nil, errors.New(fmt.Sprintf("User %d has no membership for board %d", user.ID, boardId));
 	}
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("error: %v", err)
-		return boardHubs
+		return boardHubs, nil
 	}
 
-	// TODO: Auth
 	var boardHubToUse *Hub
 	// TODO: boardHubs could just be a map?
 	for _, boardHub := range boardHubs {
@@ -193,5 +213,5 @@ func serveWs(boardHubs []*Hub, c *gin.Context) []*Hub {
 
 	go client.writePump()
 	go client.readPump()
-	return boardHubs
+	return boardHubs, nil
 }
