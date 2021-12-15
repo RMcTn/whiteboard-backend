@@ -244,7 +244,7 @@ func (env *Env) CreateUser(c *gin.Context) {
 
 	sessionId = uuid.New()
 	env.sessions[sessionId] = email
-	c.SetCookie("sessionId", sessionId.String(), 0, "/", "localhost", false, false)
+	c.SetCookie("sessionId", sessionId.String(), 0, "/", c.Request.Host, false, false)
 
 	userUrl := fmt.Sprintf("/user/%d", user.ID)
 	c.Redirect(http.StatusFound, userUrl)
@@ -296,7 +296,8 @@ func (env *Env) SignInUser(c *gin.Context) {
 	sessionId := uuid.New()
 	env.sessions[sessionId] = email
 
-	c.SetCookie("sessionId", sessionId.String(), 0, "/", "localhost", false, false)
+
+	c.SetCookie("sessionId", sessionId.String(), 0, "/", c.Request.Host, false, false)
 	c.Redirect(http.StatusFound, fmt.Sprintf("/user/%d", user.ID))
 }
 
