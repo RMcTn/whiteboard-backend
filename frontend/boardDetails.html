@@ -2,11 +2,16 @@
 {{template "application" }}
 </head>
 <p> Viewing board {{.ID}}</p>
-<turbo-frame id="addUserToBoard">
-	<form action="{{.ID}}/add_user">
-		<input type="submit" value="Add user">
-	</form>
-</turbo-frame>
+<form action="{{.ID}}/add_user" method="POST">
+	<label for="userToAdd">User to add:</label>
+	<input type="text" name="userToAdd">
+	<input type="submit" value="Add user">
+</form>
+<form action="{{.ID}}/remove_user" method="POST">
+	<label for="userToRemove">User to remove:</label>
+	<input type="text" name="userToRemove">
+	<input type="submit" value="Remove user">
+</form>
 <button>Remove user</button>
 <button>Delete this board</button>
 <a href="{{.ID}}/members/">Members</a>

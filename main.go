@@ -113,7 +113,6 @@ type BoardMember struct {
 	UserID uint `gorm:"primaryKey;autoincrement:false"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 var db *gorm.DB
@@ -182,7 +181,7 @@ func (env *Env) GetBoard(c *gin.Context) {
 		if err != nil {
 			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 		}
-		return;
+		return
 	}
 
 
@@ -309,7 +308,7 @@ func (env *Env) GetUser(c *gin.Context) {
 		if err != nil {
 			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 		}
-		return;
+		return
 	}
 
 	userId := c.Params.ByName("userId")
@@ -322,7 +321,7 @@ func (env *Env) GetUser(c *gin.Context) {
 		if err != nil {
 			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 		}
-		return;
+		return
 	}
 	log.Printf("UserId: %s", userId)
 	user = User{}
@@ -364,42 +363,11 @@ func (env *Env) GetBoardsForUser(c *gin.Context) {
 	}
 }
 
-func (env *Env) AddUserToBoardPage(c *gin.Context) {
-	sessionId, err := getSessionIdFromCookie(c)
-	if err != nil {
-		c.Redirect(http.StatusFound, "/signin")
-		return
-	}
-	user, err := env.getUserFromSession(sessionId)
-	if err != nil {
-		c.Redirect(http.StatusFound, "/signin")
-		return
-	}
-	// TODO: handle this err
-	boardId, err := strconv.Atoi(c.Params.ByName("boardId"))
-	board := Board{}
-	board.ID = uint(boardId)
-	userIsMemberOfBoard := env.isUserMemberOfBoard(user, board)
-
-	if !userIsMemberOfBoard {
-		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
-
-		if err != nil {
-			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
-		}
-		return;
-	}
-		err = templates.ExecuteTemplate(c.Writer, "addUserToBoard.html", board)
-
-		if err != nil {
-			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
-		}
-}
-
 func (env *Env) AddUserToBoard(c *gin.Context) {
 	sessionId, err := getSessionIdFromCookie(c)
 	if err != nil {
-		panic(err)
+		c.Redirect(http.StatusFound, "/signin")
+		return
 	}
 	user, err := env.getUserFromSession(sessionId)
 	if err != nil {
@@ -422,7 +390,7 @@ func (env *Env) AddUserToBoard(c *gin.Context) {
 		if err != nil {
 			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 		}
-		return;
+		return
 	}
 	// Get user id from form post
 	// TODO: handle this err
@@ -432,7 +400,6 @@ func (env *Env) AddUserToBoard(c *gin.Context) {
 	userToAdd := User{}
 	// TODO: If a user can't be found, user ID 0 will be added to the boardMember FIX
 	env.db.First(&userToAdd, "email = ?", usernameToAdd)
-	// get board id from url (should we get it from form?)
 	boardMember = BoardMember{}
 	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, userToAdd.ID)
 	// Check if user is already a member
@@ -444,7 +411,7 @@ func (env *Env) AddUserToBoard(c *gin.Context) {
 		env.db.Create(&BoardMember)
 		log.Printf("Added user %d to board %d", userToAdd.ID, boardId)
 		c.Redirect(http.StatusFound, fmt.Sprintf("/board/%d/members", boardId))
-		return;
+		return
 	} else {
 		log.Printf("User %d is already a member of board %d", userToAdd.ID, boardId)
 	}
@@ -473,7 +440,7 @@ func (env *Env) GetBoardMembers(c *gin.Context) {
 		if err != nil {
 			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 		}
-		return;
+		return
 	}
 	rows, err := env.db.Table("users").Select("email").Joins("JOIN board_members on users.id = board_members.user_id").Where("board_members.board_id = ?", board.ID).Rows()
 	usernames := []string{}
@@ -497,6 +464,60 @@ func (env *Env) isUserMemberOfBoard(user User, board Board) bool {
 		return false
 	}
 	return true
+}
+
+func (env *Env) RemoveUserFromBoard(c *gin.Context) {
+	sessionId, err := getSessionIdFromCookie(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	// Check if requesting user is member of the board
+
+	boardMember := BoardMember{}
+
+	// TODO: handle this err
+	boardId, err := strconv.Atoi(c.Params.ByName("boardId"))
+
+	// TODO: Check if there's a result from this if the query fails
+	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, user.ID)
+
+	if boardMember.BoardID == 0 {
+		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	// Get user id from form post
+	// TODO: handle this err
+	usernameToRemove := c.PostForm("userToRemove")
+	
+
+	userToRemove := User{}
+	env.db.First(&userToRemove, "email = ?", usernameToRemove)
+
+	boardMember = BoardMember{}
+	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, userToRemove.ID)
+
+	log.Printf("Board member is %d, and %d", boardMember.BoardID, boardMember.UserID)
+	if boardMember.BoardID != 0 {
+		// TODO: Check for errors
+		env.db.Delete(&boardMember)
+		log.Printf("Removed user %d from board %d", userToRemove.ID, boardId)
+		c.Redirect(http.StatusFound, fmt.Sprintf("/board/%d/members", boardId))
+		return
+	} else {
+		log.Printf("User %d was not a member of of board %d", userToRemove.ID, boardId)
+		c.Redirect(http.StatusFound, fmt.Sprintf("/board/%d/members", boardId))
+		return
+	}
 }
 
 func main() {
@@ -561,8 +582,8 @@ func main() {
 	r.GET("/signin", env.SignInPage)
 	r.GET("/user/:userId", env.GetUser)
 	r.GET("/boards", env.GetBoardsForUser)
-	r.GET("/board/:boardId/add_user", env.AddUserToBoardPage)
 	r.POST("/board/:boardId/add_user", env.AddUserToBoard)
+	r.POST("/board/:boardId/remove_user", env.RemoveUserFromBoard)
 	r.GET("/board/:boardId/members", env.GetBoardMembers)
 	r.Run(":8081")
 }
