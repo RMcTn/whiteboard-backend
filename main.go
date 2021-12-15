@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -545,7 +546,12 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
-	dsn := "host=localhost user=postgres password=password dbname=whiteboard port=5432 sslmode=disable"
+	dbHost := os.Getenv("DATABASE_HOST")
+	dbPort := os.Getenv("DATABASE_PORT")
+	dbUsername := os.Getenv("DATABASE_USERNAME")
+	dbPassword := os.Getenv("DATABASE_PASSWORD")
+	
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=whiteboard port=%s sslmode=disable", dbHost, dbUsername, dbPassword, dbPort)
 	var err error
 	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -606,5 +612,6 @@ func main() {
 	r.POST("/board/:boardId/add_user", env.AddUserToBoard)
 	r.POST("/board/:boardId/remove_user", env.RemoveUserFromBoard)
 	r.GET("/board/:boardId/members", env.GetBoardMembers)
-	r.Run(":8081")
+	port := os.Getenv("PORT")
+	r.Run(":" + port)
 }
