@@ -546,14 +546,14 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
-	dbHost := os.Getenv("DATABASE_HOST")
-	dbPort := os.Getenv("DATABASE_PORT")
-	dbUsername := os.Getenv("DATABASE_USERNAME")
-	dbPassword := os.Getenv("DATABASE_PASSWORD")
+	//dbHost := os.Getenv("DATABASE_HOST")
+	//dbPort := os.Getenv("DATABASE_PORT")
+	//dbUsername := os.Getenv("DATABASE_USERNAME")
+	//dbPassword := os.Getenv("DATABASE_PASSWORD")
 	
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=whiteboard port=%s sslmode=disable", dbHost, dbUsername, dbPassword, dbPort)
+	//dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=whiteboard port=%s sslmode=disable", dbHost, dbUsername, dbPassword, dbPort)
 	var err error
-	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err = gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
 	if err != nil {
 		panic("Failed to connect to database %v")
 	}
