@@ -1,6 +1,14 @@
+<head>
+{{template "application" }}
+</head>
 <p> Viewing board {{.ID}}</p>
-
-<button>Add user</button>
+<turbo-frame id="addUserToBoard">
+	<form action="{{.ID}}/add_user">
+		<input type="submit" value="Add user">
+	</form>
+</turbo-frame>
 <button>Remove user</button>
 <button>Delete this board</button>
+<a href="{{.ID}}/members/">Members</a>
 <a href="/?boardId={{.ID}}">Go to draw</a>
+<a href="/boards/">Boards</a>

@@ -1,0 +1,10 @@
+<head>
+{{template "application" }}
+</head>
+<turbo-frame id="addUserToBoard">
+	<form action="{{.ID}}/add_user" method="POST" data-turbo-frame="_top">
+		<label for="userToAdd">User to add:</label>
+		<input type="text" name="userToAdd">
+		<input type="submit" value="Add user">
+	</form>
+</turbo-frame>

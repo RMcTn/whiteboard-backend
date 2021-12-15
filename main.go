@@ -162,7 +162,8 @@ func (env *Env) NewBoard(c *gin.Context) {
 func (env *Env) GetBoard(c *gin.Context) {
 	sessionId, err := getSessionIdFromCookie(c)
 	if err != nil {
-		panic(err)
+		c.Redirect(http.StatusFound, "/signin")
+		return
 	}
 	user, err := env.getUserFromSession(sessionId)
 	if err != nil {
@@ -172,8 +173,7 @@ func (env *Env) GetBoard(c *gin.Context) {
 
 	boardId := c.Params.ByName("boardId")
 	boardMember := BoardMember{}
-
-	// TODO: Check if there's a result from this if the query fails
+// TODO: Check if there's a result from this if the query fails
 	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, user.ID)
 
 	if boardMember.BoardID == 0 {
@@ -364,10 +364,145 @@ func (env *Env) GetBoardsForUser(c *gin.Context) {
 	}
 }
 
+func (env *Env) AddUserToBoardPage(c *gin.Context) {
+	sessionId, err := getSessionIdFromCookie(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	// TODO: handle this err
+	boardId, err := strconv.Atoi(c.Params.ByName("boardId"))
+	board := Board{}
+	board.ID = uint(boardId)
+	userIsMemberOfBoard := env.isUserMemberOfBoard(user, board)
+
+	if !userIsMemberOfBoard {
+		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+		return;
+	}
+		err = templates.ExecuteTemplate(c.Writer, "addUserToBoard.html", board)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+}
+
+func (env *Env) AddUserToBoard(c *gin.Context) {
+	sessionId, err := getSessionIdFromCookie(c)
+	if err != nil {
+		panic(err)
+	}
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	// Check if requesting user is member of the board
+
+	boardMember := BoardMember{}
+
+	// TODO: handle this err
+	boardId, err := strconv.Atoi(c.Params.ByName("boardId"))
+
+	// TODO: Check if there's a result from this if the query fails
+	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, user.ID)
+
+	if boardMember.BoardID == 0 {
+		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+		return;
+	}
+	// Get user id from form post
+	// TODO: handle this err
+	usernameToAdd := c.PostForm("userToAdd")
+	
+
+	userToAdd := User{}
+	// TODO: If a user can't be found, user ID 0 will be added to the boardMember FIX
+	env.db.First(&userToAdd, "email = ?", usernameToAdd)
+	// get board id from url (should we get it from form?)
+	boardMember = BoardMember{}
+	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, userToAdd.ID)
+	// Check if user is already a member
+	if boardMember.BoardID == 0 {
+		// Create board member
+		
+		BoardMember := BoardMember{BoardID: uint(boardId), UserID: userToAdd.ID}
+		// TODO: Check for errors
+		env.db.Create(&BoardMember)
+		log.Printf("Added user %d to board %d", userToAdd.ID, boardId)
+		c.Redirect(http.StatusFound, fmt.Sprintf("/board/%d/members", boardId))
+		return;
+	} else {
+		log.Printf("User %d is already a member of board %d", userToAdd.ID, boardId)
+	}
+}
+
+func (env *Env) GetBoardMembers(c *gin.Context) {
+	sessionId, err := getSessionIdFromCookie(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/signin")
+		return
+	}
+	// TODO: Handle this error and make convienence function for getting board id from params
+	boardId, _ := strconv.Atoi(c.Params.ByName("boardId"))
+	board := Board{}
+	board.ID = uint(boardId)
+	userIsMemberOfBoard := env.isUserMemberOfBoard(user, board)
+
+	if !userIsMemberOfBoard {
+		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+		return;
+	}
+	rows, err := env.db.Table("users").Select("email").Joins("JOIN board_members on users.id = board_members.user_id").Where("board_members.board_id = ?", board.ID).Rows()
+	usernames := []string{}
+	for rows.Next() {
+		// Want usernames here
+		username := ""
+		rows.Scan(&username)
+		usernames = append(usernames, username)
+	}
+	err = templates.ExecuteTemplate(c.Writer, "boardMembers.html", usernames)
+
+	if err != nil {
+		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (env *Env) isUserMemberOfBoard(user User, board Board) bool {
+	boardMember := BoardMember{}
+
+	if result := env.db.First(&boardMember, "board_id = ? AND user_id = ?", board.ID, user.ID); result.Error != nil {
+		return false
+	}
+	return true
+}
+
 func main() {
 	// TODO: format check in ws
 
-	// TODO: For "room/board" concept for now, just have 2-3 boards that are joinable by clicking a button
+	// TODO: Auth middleware rather than manual auth in each route
 	flag.Parse()
 	log.SetFlags(0)
 
@@ -410,6 +545,8 @@ func main() {
 		tempBoardHubs, err := env.serveWs(boardHubs, context)
 		if err != nil {
 			log.Printf("User couldn't join board")
+			// TODO: Tell frontend about error
+			// Redirect to signin page?
 			return
 		}
 		boardHubs = tempBoardHubs
@@ -424,5 +561,8 @@ func main() {
 	r.GET("/signin", env.SignInPage)
 	r.GET("/user/:userId", env.GetUser)
 	r.GET("/boards", env.GetBoardsForUser)
+	r.GET("/board/:boardId/add_user", env.AddUserToBoardPage)
+	r.POST("/board/:boardId/add_user", env.AddUserToBoard)
+	r.GET("/board/:boardId/members", env.GetBoardMembers)
 	r.Run(":8081")
 }
