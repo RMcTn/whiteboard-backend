@@ -200,7 +200,7 @@
 			appendLog(item);
 		return;
 		{{ end }}
-                conn = new WebSocket("ws://" + document.location.host + "/ws?board=" + board);
+                conn = new WebSocket("wss://" + document.location.host + "/ws?board=" + board);
                 conn.onclose = function (evt) {
                     console.log(evt);
                     if (evt.code === 1009) {

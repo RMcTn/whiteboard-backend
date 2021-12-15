@@ -600,6 +600,20 @@ func main() {
 		}
 		boardHubs = tempBoardHubs
 	})
+	r.GET("/wss", func(context *gin.Context) {
+		// TODO: Surely can just pass a slice?
+		tempBoardHubs, err := env.serveWs(boardHubs, context)
+		if err != nil {
+			log.Printf("User couldn't join board")
+			err = templates.ExecuteTemplate(context.Writer, "notAuthorized.html", nil)
+
+			if err != nil {
+				http.Error(context.Writer, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+		boardHubs = tempBoardHubs
+	})
 	r.GET("/", env.ServeHome)
 	r.POST("/board", env.PostBoard)
 	r.GET("/board", env.NewBoard)
