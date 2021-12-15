@@ -171,16 +171,10 @@ func (env *Env) serveWs(boardHubs []*Hub, c *gin.Context) ([]*Hub, error) {
 	}
 
 	// TODO: SPEEDUP: This is quite slow now, too many db calls potentially?
-	// TODO: Handle this err
 	sessionId, _ := getSessionIdFromCookie(c)
 	user, err := env.getUserFromSession(sessionId)
 
 	if err != nil {
-		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
-
-		if err != nil {
-			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
-		}
 		return nil, errors.New("No session for this user");
 	}
 
@@ -190,11 +184,6 @@ func (env *Env) serveWs(boardHubs []*Hub, c *gin.Context) ([]*Hub, error) {
 	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, user.ID)
 
 	if boardMember.BoardID == 0 {
-		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
-
-		if err != nil {
-			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
-		}
 		return nil, errors.New(fmt.Sprintf("User %d has no membership for board %d", user.ID, boardId));
 	}
 

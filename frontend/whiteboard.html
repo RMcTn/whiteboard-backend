@@ -183,10 +183,23 @@
             if (window["WebSocket"]) {
                 const params = new URLSearchParams(window.location.search);
                 let board = params.get('boardId')
-                console.log("Board id: " + board);
+		console.log("Board id: " + board);
                 if (board === null) {
-                    board = 1
+                    const item = document.createElement("div");
+				    {{ if eq .loggedIn true}}
+                    item.innerHTML = "<b>Please select a board</b>";
+				    {{ else }}
+			item.innerHTML = "<b>Not signed in</b>";
+				    {{ end }}
+			appendLog(item);
+				    return;
                 }
+		{{ if eq .loggedIn false}}
+			const item = document.createElement("div");
+			item.innerHTML = "<b>Not signed in. Cannot view this board</b>";
+			appendLog(item);
+		return;
+		{{ end }}
                 conn = new WebSocket("ws://" + document.location.host + "/ws?board=" + board);
                 conn.onclose = function (evt) {
                     console.log(evt);
@@ -230,11 +243,16 @@
         });
     </script>
 </head>
-{{template "bar"}}
+{{template "bar" .}}
 <body>
 <div id="log">
+	{{ if .error }}
+		<div>You are not authorized for this board</div>
+	{{ end }}
 </div>
-{{template "sidebar" .}}
+{{ if eq .loggedIn true}}
+	{{template "sidebar" .}}
+{{end}}
 <div class="h-full m-0 p-0 overflow-hidden overflow-y-hidden">
     <main class="bg-white overflow-hidden w-screen h-screen">
         <svg style="width: 100%; height: 100%; position: fixed;" id="svg" tabindex="0"

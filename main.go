@@ -56,7 +56,7 @@ func getSessionIdFromCookie(c *gin.Context) (uuid.UUID, error) {
 	return sessionId, nil
 }
 
-func serveHome(c *gin.Context) {
+func (env *Env) ServeHome(c *gin.Context) {
 	writer := c.Writer
 	request := c.Request
 	log.Println(request.URL)
@@ -69,17 +69,38 @@ func serveHome(c *gin.Context) {
 		return
 	}
 
+
 	board := Board{}
-	// TODO: Error handle here
-	db.First(&board, c.Query("boardId"))
-	templateVars := map[string]interface{}{"boardName": board.BoardName, "boardId": board.ID}
-	log.Println(templateVars)
-	err := templates.ExecuteTemplate(writer, "whiteboard.html", templateVars)
+	if c.Query("boardId") != "" {
+		db.First(&board, c.Query("boardId"))
+	}
+
+	templateVars := map[string]interface{}{}
+	sessionId, _ := getSessionIdFromCookie(c)
+	user, err := env.getUserFromSession(sessionId)
+	if err != nil {
+		templateVars["loggedIn"] = false
+		err = templates.ExecuteTemplate(writer, "whiteboard.html", templateVars)
+
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+		}
+		return;
+	} else {
+		templateVars["loggedIn"] = true
+	}
+	userIsMemberOfBoard := env.isUserMemberOfBoard(user, board)
+	if !userIsMemberOfBoard {
+		templateVars["error"] = "You don't have permission for this board"
+	} else {
+		templateVars["boardName"] = board.BoardName
+		templateVars["boardId"] = board.ID
+	}
+	err = templates.ExecuteTemplate(writer, "whiteboard.html", templateVars)
 
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 	}
-//	http.ServeFile(writer, request, "frontend/whiteboard.html")
 }
 
 type Point struct {
@@ -563,13 +584,16 @@ func main() {
 		tempBoardHubs, err := env.serveWs(boardHubs, context)
 		if err != nil {
 			log.Printf("User couldn't join board")
-			// TODO: Tell frontend about error
-			// Redirect to signin page?
+			err = templates.ExecuteTemplate(context.Writer, "notAuthorized.html", nil)
+
+			if err != nil {
+				http.Error(context.Writer, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 		boardHubs = tempBoardHubs
 	})
-	r.GET("/", serveHome)
+	r.GET("/", env.ServeHome)
 	r.POST("/board", env.PostBoard)
 	r.GET("/board", env.NewBoard)
 	r.GET("/board/:boardId", env.GetBoard)
