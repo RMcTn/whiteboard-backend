@@ -1,0 +1,15 @@
+{{define "sidebar"}}
+<div style="position: absolute; top: 50%; bottom: 50%; transform: translateY(-50%); width: 16rem; height: 16rem; z-index: 10; background-color: rgb(243 244 246); border-radius: 0.5rem;">
+	<div style="position: absolute; overflow: auto; width: 100%; height: 100%;">
+		{{ if .boardName }}
+		<span style="padding: 5% 0 0 10%">Current board: {{.boardName}}</span>
+
+		{{end}}
+		<turbo-frame id="boards" src='/boards' style="overflow: auto;">
+			<form action="boards/">
+				<input type="submit" value="View boards">
+			</form>
+		</turbo-frame>
+	</div>
+</div>
+{{end}}

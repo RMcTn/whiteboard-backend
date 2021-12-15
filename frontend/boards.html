@@ -1,12 +1,16 @@
 <head>
 {{template "application" }}
 </head>
-<ul>
-{{range .}}
-<li><a href="/board/{{.}}">Board {{.}}</a></li>
-{{end}}
+<turbo-frame id="boards">
 
-<turbo-frame id="board-new">
-	<a href="board/">Create new board</a>
+<turbo-frame id="board-new" >
+			<form action="board/" style="padding: 0 0 0 10%;">
+				<input type="submit" value="Create new board">
+			</form>
+</turbo-frame>
+<ul style="padding: 0 0 0 10%;">
+{{range .}}
+<li style="list-style-type: none; margin: 0; padding: 0;"><a href="/board/{{.id}}" data-turbo="false">{{.board_name}}</a> <a href="/?boardId={{.id}}" data-turbo="false">Draw!</a></li>
+{{end}}
 </turbo-frame>
 </ul>

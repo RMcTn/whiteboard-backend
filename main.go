@@ -72,7 +72,9 @@ func serveHome(c *gin.Context) {
 	board := Board{}
 	// TODO: Error handle here
 	db.First(&board, c.Query("boardId"))
-	err := templates.ExecuteTemplate(writer, "whiteboard.html", board)
+	templateVars := map[string]interface{}{"boardName": board.BoardName, "boardId": board.ID}
+	log.Println(templateVars)
+	err := templates.ExecuteTemplate(writer, "whiteboard.html", templateVars)
 
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
@@ -346,17 +348,12 @@ func (env *Env) GetBoardsForUser(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/signin")
 		return
 	}
-	// get all boardmembers where userid = user.id
-	// join on boards table on boardID = board.id
-	rows, err := env.db.Table("board_members").Select("boards.ID").Joins("JOIN boards on boards.id = board_members.board_id").Where("board_members.user_id = ?", user.ID).Rows()
 
-	boardIds := []int{}
-	for rows.Next() {
-		boardId := 0
-		rows.Scan(&boardId)
-		boardIds = append(boardIds, boardId)
-	}
-	err = templates.ExecuteTemplate(c.Writer, "boards.html", boardIds)
+	var results []map[string]interface{}
+
+	env.db.Table("board_members").Select("boards.ID", "boards.board_name").Joins("JOIN boards on boards.id = board_members.board_id").Where("board_members.user_id = ?", user.ID).Find(&results)
+
+	err = templates.ExecuteTemplate(c.Writer, "boards.html", results)
 
 	if err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)

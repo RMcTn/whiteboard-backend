@@ -230,12 +230,11 @@
         });
     </script>
 </head>
+{{template "bar"}}
 <body>
 <div id="log">
-
 </div>
-{{template "footer" .}}
-<p>Board name {{.BoardName}}</p>
+{{template "sidebar" .}}
 <div class="h-full m-0 p-0 overflow-hidden overflow-y-hidden">
     <main class="bg-white overflow-hidden w-screen h-screen">
         <svg style="width: 100%; height: 100%; position: fixed;" id="svg" tabindex="0"
