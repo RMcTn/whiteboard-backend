@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/joho/godotenv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -28,6 +30,7 @@ type Env struct {
 	// TODO: Should this be a map to user ID?
 	// TODO: Add time to live to the session id 
 	sessions map[uuid.UUID]string
+	Environment string
 }
 
 func (env *Env) getUserFromSession(sessionId uuid.UUID) (User, error) {
@@ -97,6 +100,7 @@ func (env *Env) ServeHome(c *gin.Context) {
 		templateVars["boardName"] = board.BoardName
 		templateVars["boardId"] = board.ID
 	}
+	templateVars["env"] = env.Environment
 	err = templates.ExecuteTemplate(writer, "whiteboard.html", templateVars)
 
 	if err != nil {
@@ -547,13 +551,18 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
+	err := godotenv.Load()
+
+	if err != nil {
+		log.Println("Could not load .env file")
+	}
+
 	//dbHost := os.Getenv("DATABASE_HOST")
 	//dbPort := os.Getenv("DATABASE_PORT")
 	//dbUsername := os.Getenv("DATABASE_USERNAME")
 	//dbPassword := os.Getenv("DATABASE_PASSWORD")
 	
 	//dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=whiteboard port=%s sslmode=disable", dbHost, dbUsername, dbPassword, dbPort)
-	var err error
 	db, err = gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
 	if err != nil {
 		panic("Failed to connect to database %v")
@@ -580,27 +589,21 @@ func main() {
 
 	// TODO: Use addr
 	r := gin.Default()
-	env := &Env{db: db, sessions: make(map[uuid.UUID]string)}
+	environmentToRun := os.Getenv("ENV")
+	if environmentToRun == "" {
+		environmentToRun = "dev"
+	}
+
+	env := &Env{db: db, sessions: make(map[uuid.UUID]string), Environment: environmentToRun}
+
+	log.Printf("Running in %s mode", env.Environment)
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Pong",
 		})
 	})
-	r.GET("/ws", func(context *gin.Context) {
-		// TODO: Surely can just pass a slice?
-		tempBoardHubs, err := env.serveWs(boardHubs, context)
-		if err != nil {
-			log.Printf("User couldn't join board")
-			err = templates.ExecuteTemplate(context.Writer, "notAuthorized.html", nil)
 
-			if err != nil {
-				http.Error(context.Writer, err.Error(), http.StatusInternalServerError)
-			}
-			return
-		}
-		boardHubs = tempBoardHubs
-	})
-	r.GET("/wss", func(context *gin.Context) {
+	r.GET("/ws", func(context *gin.Context) {
 		// TODO: Surely can just pass a slice?
 		tempBoardHubs, err := env.serveWs(boardHubs, context)
 		if err != nil {
