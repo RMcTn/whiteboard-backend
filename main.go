@@ -34,12 +34,12 @@ type Env struct {
 }
 
 func (env *Env) getUserFromSession(sessionId uuid.UUID) (User, error) {
-		email, ok := env.sessions[sessionId]
+		username, ok := env.sessions[sessionId]
 		if ok {
 			log.Printf("Session %s is valid", sessionId.String())
 			user := User{}
 			// TODO: Check the err here
-			env.db.Where("email = ?", email).First(&user)
+			env.db.Where("username = ?", username).First(&user)
 			return user, nil
 		} else {
 			return User{}, errors.New(fmt.Sprintf("Session %s not found", sessionId.String()))
@@ -137,7 +137,7 @@ type Board struct {
 
 type User struct {
 	gorm.Model
-	Email string `gorm:"unique;not null"`
+	Username string `gorm:"unique;not null"`
 	PasswordHash string `gorm:"not null"`
 }
 
@@ -232,8 +232,8 @@ func (env *Env) GetBoard(c *gin.Context) {
 }
 
 func (env *Env) CreateUser(c *gin.Context) {
-	// TODO: Validate email
-	email := c.PostForm("email")
+	// TODO: Validate username
+	username := c.PostForm("username")
 
 	// TODO: Validate password
 	password := c.PostForm("password")
@@ -247,12 +247,12 @@ func (env *Env) CreateUser(c *gin.Context) {
 	}
 	// TODO: Handle err
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	user = User{Email: email, PasswordHash: string(passwordHash)}
+	user = User{Username: username, PasswordHash: string(passwordHash)}
 	env.db.Create(&user)
-	log.Printf("New user created: %s", user.Email)
+	log.Printf("New user created: %s", user.Username)
 
 	sessionId = uuid.New()
-	env.sessions[sessionId] = email
+	env.sessions[sessionId] = username
 	c.SetCookie("sessionId", sessionId.String(), 0, "/", c.Request.Host, false, false)
 
 	userUrl := fmt.Sprintf("/user/%d", user.ID)
@@ -283,15 +283,15 @@ func (env *Env) NewUser(c *gin.Context) {
 }
 
 func (env *Env) SignInUser(c *gin.Context) {
-	// TODO: Validate email
-	email := c.PostForm("email")
+	// TODO: Validate username
+	username := c.PostForm("username")
 
 	// TODO: Validate password
 	password := c.PostForm("password")
 
 
 	user := User{}
-	env.db.Where("email = ?", email).First(&user)
+	env.db.Where("username = ?", username).First(&user)
 	log.Println(user)
 
 	// TODO: Handle err
@@ -303,7 +303,7 @@ func (env *Env) SignInUser(c *gin.Context) {
 	log.Println("Success logging in")
 
 	sessionId := uuid.New()
-	env.sessions[sessionId] = email
+	env.sessions[sessionId] = username
 
 
 	c.SetCookie("sessionId", sessionId.String(), 0, "/", c.Request.Host, false, false)
@@ -360,7 +360,7 @@ func (env *Env) GetUser(c *gin.Context) {
 	log.Printf("UserId: %s", userId)
 	user = User{}
 	db.First(&user, userId)
-	log.Printf("User %s id %d\n", user.Email, user.ID)
+	log.Printf("User %s id %d\n", user.Username, user.ID)
 	log.Printf("=========================")
 
 	err = templates.ExecuteTemplate(c.Writer, "user.html", user)
@@ -428,7 +428,7 @@ func (env *Env) AddUserToBoard(c *gin.Context) {
 
 	userToAdd := User{}
 	// TODO: If a user can't be found, user ID 0 will be added to the boardMember FIX
-	env.db.First(&userToAdd, "email = ?", usernameToAdd)
+	env.db.First(&userToAdd, "username = ?", usernameToAdd)
 	boardMember = BoardMember{}
 	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, userToAdd.ID)
 	// Check if user is already a member
@@ -471,7 +471,7 @@ func (env *Env) GetBoardMembers(c *gin.Context) {
 		}
 		return
 	}
-	rows, err := env.db.Table("users").Select("email").Joins("JOIN board_members on users.id = board_members.user_id").Where("board_members.board_id = ?", board.ID).Rows()
+	rows, err := env.db.Table("users").Select("username").Joins("JOIN board_members on users.id = board_members.user_id").Where("board_members.board_id = ?", board.ID).Rows()
 	usernames := []string{}
 	for rows.Next() {
 		// Want usernames here
@@ -530,7 +530,7 @@ func (env *Env) RemoveUserFromBoard(c *gin.Context) {
 	
 
 	userToRemove := User{}
-	env.db.First(&userToRemove, "email = ?", usernameToRemove)
+	env.db.First(&userToRemove, "username = ?", usernameToRemove)
 
 	boardMember = BoardMember{}
 	env.db.First(&boardMember, "board_id = ? AND user_id = ?", boardId, userToRemove.ID)
