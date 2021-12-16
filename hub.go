@@ -9,8 +9,6 @@ import (
 )
 
 type Hub struct {
-	// TODO: Hub to become each "board room" and send points to clients connected there
-
 	boardId int
 
 	// Registered clients.
