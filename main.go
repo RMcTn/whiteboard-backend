@@ -337,7 +337,7 @@ func (env *Env) GetUser(c *gin.Context) {
 	sessionId, err := getSessionIdFromCookie(c)
 	user, err := env.getUserFromSession(sessionId)
 	if err != nil {
-		err = templates.ExecuteTemplate(c.Writer, "notAuthorized.html", nil)
+		err = templates.ExecuteTemplate(c.Writer, "signIn.html", nil)
 
 		if err != nil {
 			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
