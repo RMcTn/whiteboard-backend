@@ -100,6 +100,11 @@ func (env *Env) ServeHome(c *gin.Context) {
 		templateVars["boardName"] = board.BoardName
 		templateVars["boardId"] = board.ID
 	}
+
+	if board.ID == 0 && user.ID != 0 {
+		// User is logged in but hasn't selected a board, not an error
+		templateVars["error"] = nil
+	}
 	templateVars["env"] = env.Environment
 	err = templates.ExecuteTemplate(writer, "whiteboard.html", templateVars)
 
