@@ -310,12 +310,30 @@ func (env *Env) NewUser(c *gin.Context) {
 }
 
 func (env *Env) SignInUser(c *gin.Context) {
-	// TODO: Validate username
+	validationErrors := []string{}
 	username := c.PostForm("username")
 
-	// TODO: Validate password
+	if username == "" {
+		validationErrors = append(validationErrors, "Username cannot be empty")
+	}
+
 	password := c.PostForm("password")
 
+	if password == "" {
+		validationErrors = append(validationErrors, "Password cannot be empty")
+	}
+
+	minPasswordLength := 8
+	if len(password) < minPasswordLength {
+		validationErrors = append(validationErrors, fmt.Sprintf("Password must be at least %d characters long", minPasswordLength))
+	}
+	
+	templateVars := map[string]interface{}{"username": username}
+	if len(validationErrors) > 0 {
+		templateVars["errors"] = validationErrors
+		c.HTML(http.StatusUnprocessableEntity, "signIn.html", templateVars)
+		return
+	}
 
 	user := User{}
 	env.db.Where("username = ?", username).First(&user)
@@ -324,7 +342,9 @@ func (env *Env) SignInUser(c *gin.Context) {
 	// TODO: Handle err
 	err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
-		http.Error(c.Writer, err.Error(), http.StatusUnauthorized)
+		validationErrors = append(validationErrors, "Incorrect details")
+		templateVars["errors"] = validationErrors
+		c.HTML(http.StatusUnprocessableEntity, "signIn.html", templateVars)
 		return
 	}
 	log.Println("Success logging in")
