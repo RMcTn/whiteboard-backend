@@ -232,11 +232,31 @@ func (env *Env) GetBoard(c *gin.Context) {
 }
 
 func (env *Env) CreateUser(c *gin.Context) {
-	// TODO: Validate username
+	validationErrors := []string{}
 	username := c.PostForm("username")
 
-	// TODO: Validate password
+	if username == "" {
+		validationErrors = append(validationErrors, "Username cannot be empty")
+	}
+
 	password := c.PostForm("password")
+
+	if password == "" {
+		validationErrors = append(validationErrors, "Password cannot be empty")
+	}
+
+	minPasswordLength := 8
+	if len(password) < minPasswordLength {
+		validationErrors = append(validationErrors, fmt.Sprintf("Password must be at least %d characters long", minPasswordLength))
+	}
+	
+	templateVars := map[string]interface{}{"username": username}
+	if len(validationErrors) > 0 {
+		templateVars["errors"] = validationErrors
+		c.HTML(http.StatusUnprocessableEntity, "newUser.html", templateVars)
+		return
+	}
+
 	// TODO: handle this error
 	sessionId, err := getSessionIdFromCookie(c)
 	user, err := env.getUserFromSession(sessionId)
@@ -249,6 +269,13 @@ func (env *Env) CreateUser(c *gin.Context) {
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	user = User{Username: username, PasswordHash: string(passwordHash)}
 	env.db.Create(&user)
+
+	if user.ID == 0 {
+		validationErrors = append(validationErrors, "Username is already taken")
+		templateVars["errors"] = validationErrors
+		c.HTML(http.StatusUnprocessableEntity, "newUser.html", templateVars)
+		return
+	}
 	log.Printf("New user created: %s", user.Username)
 
 	sessionId = uuid.New()
@@ -588,6 +615,8 @@ func main() {
 
 	// TODO: Use addr
 	r := gin.Default()
+	// TODO: Move over to using gin for template rendering
+	r.LoadHTMLGlob("frontend/*.html")
 	environmentToRun := os.Getenv("ENV")
 	if environmentToRun == "" {
 		environmentToRun = "dev"
