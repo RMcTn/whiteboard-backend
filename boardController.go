@@ -57,7 +57,7 @@ func (env *Env) AddUserToBoard(c *gin.Context) {
 		// TODO: Check for errors
 		env.db.Create(&BoardMember)
 		log.Printf("Added user %d to board %d", userToAdd.ID, boardId)
-		c.Redirect(http.StatusFound, fmt.Sprintf("/board/%d/members", boardId))
+		c.Redirect(http.StatusFound, fmt.Sprintf("/board/%d", boardId))
 		return
 	} else {
 		log.Printf("User %d is already a member of board %d", userToAdd.ID, boardId)
@@ -223,15 +223,9 @@ func (env *Env) GetBoardMembers(c *gin.Context) {
 		}
 		return
 	}
-	rows, err := env.db.Table("users").Select("username").Joins("JOIN board_members on users.id = board_members.user_id").Where("board_members.board_id = ?", board.ID).Rows()
-	usernames := []string{}
-	for rows.Next() {
-		// Want usernames here
-		username := ""
-		rows.Scan(&username)
-		usernames = append(usernames, username)
-	}
-	templateVars := map[string]interface{}{"usernames": usernames, "board_id": board.ID}
+	users := []User{}
+	env.db.Table("users").Select("username, id").Joins("JOIN board_members on users.id = board_members.user_id").Where("board_members.board_id = ?", board.ID).Find(&users)
+	templateVars := map[string]interface{}{"board_id": board.ID, "users": users}
 	err = templates.ExecuteTemplate(c.Writer, "boardMembers.html", templateVars)
 
 	if err != nil {

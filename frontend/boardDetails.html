@@ -7,11 +7,8 @@
 	<input type="text" name="userToAdd">
 	<input type="submit" value="Add user">
 </form>
-<form action="{{.ID}}/remove_user" method="POST">
-	<label for="userToRemove">User to remove:</label>
-	<input type="text" name="userToRemove">
-	<input type="submit" value="Remove user">
-</form>
+<turbo-frame src="{{.ID}}/members" id="members">
+</turbo-frame>
 <a href="{{.ID}}/members/">Members</a>
 <a href="/?boardId={{.ID}}">Go to draw</a>
 <a href="/boards/">Boards</a>

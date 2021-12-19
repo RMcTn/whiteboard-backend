@@ -1,11 +1,18 @@
 <head>
 {{template "application" }}
 </head>
+<turbo-frame id="members">
 <ul>
-	{{range .usernames}}
-	<li>User {{.}}</li>
+	{{range .users}}
+	<li>User {{.Username}}
+		<form action="/board/{{$.board_id}}/remove_user" method="POST">
+			<input type="hidden" name="userToRemove" id="userToRemove" value="{{.Username}}"/>
+			<input type="submit" value="Remove user">
+		</form>
+	</li>
 	{{end}}
 </ul>
+</turbo-frame>
 
 <a href="/boards">Back to boards</a>
 <a href="/board/{{.board_id}}">Back to board</a>
