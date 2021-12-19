@@ -526,7 +526,8 @@ func (env *Env) GetBoardMembers(c *gin.Context) {
 		rows.Scan(&username)
 		usernames = append(usernames, username)
 	}
-	err = templates.ExecuteTemplate(c.Writer, "boardMembers.html", usernames)
+	templateVars := map[string]interface{}{"usernames": usernames, "board_id": board.ID}
+	err = templates.ExecuteTemplate(c.Writer, "boardMembers.html", templateVars)
 
 	if err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)

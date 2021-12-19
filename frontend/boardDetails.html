@@ -1,7 +1,7 @@
 <head>
 	{{template "application" }}
 </head>
-<p> Viewing board {{.ID}}</p>
+<h1> Board {{.BoardName}}</h1>
 <form action="{{.ID}}/add_user" method="POST">
 	<label for="userToAdd">User to add:</label>
 	<input type="text" name="userToAdd">
@@ -12,8 +12,6 @@
 	<input type="text" name="userToRemove">
 	<input type="submit" value="Remove user">
 </form>
-<button>Remove user</button>
-<button>Delete this board</button>
 <a href="{{.ID}}/members/">Members</a>
 <a href="/?boardId={{.ID}}">Go to draw</a>
 <a href="/boards/">Boards</a>

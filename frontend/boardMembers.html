@@ -2,9 +2,10 @@
 {{template "application" }}
 </head>
 <ul>
-	{{range .}}
+	{{range .usernames}}
 	<li>User {{.}}</li>
 	{{end}}
 </ul>
 
 <a href="/boards">Back to boards</a>
+<a href="/board/{{.board_id}}">Back to board</a>
