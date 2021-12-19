@@ -10,7 +10,7 @@
 </turbo-frame>
 <ul style="padding: 0 0 0 10%;">
 {{range .}}
-<li style="list-style-type: none; margin: 0; padding: 0;"><a href="/board/{{.id}}" data-turbo="false">{{.board_name}}</a> <a href="/?boardId={{.id}}" data-turbo="false">Draw!</a></li>
+<li style="list-style-type: none; margin: 0; padding: 0;"><a href="/board/{{.id}}" data-turbo="false">{{.board_name}}</a> <a href="/?boardId={{.id}}" data-turbo="false"><button>Draw!</button></a></li>
 {{end}}
 </turbo-frame>
 </ul>
